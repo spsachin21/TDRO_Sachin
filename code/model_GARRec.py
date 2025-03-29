@@ -15,18 +15,21 @@ class GARRec(nn.Module):
         self.num_neg = num_neg
         self.contrastive = contrastive
         self.num_sample = num_sample
-        
-        # Save warm and cold item info (for later use if needed)
+
+        # Save warm and cold item info for later use.
         self.warm_item = warm_item  
         self.cold_item = cold_item  
 
-        # Common embedding table for users and items.
+        # These attributes are needed for TDRO:
+        self.emb_id = list(range(num_user)) + list(warm_item)
+        self.feat_id = torch.tensor([i - num_user for i in cold_item])
+        
+        # Create a single learnable embedding table for users and items.
         self.id_embedding = nn.Parameter(
             nn.init.xavier_normal_(torch.rand(num_user + num_item, dim_E))
         )
         
         # Build content feature extractor for items.
-        # If any of the features is provided, we concatenate them.
         self.v_feat = F.normalize(v_feat, dim=1) if v_feat is not None else None
         self.a_feat = F.normalize(a_feat, dim=1) if a_feat is not None else None
         self.t_feat = F.normalize(t_feat, dim=1) if t_feat is not None else None
@@ -39,7 +42,6 @@ class GARRec(nn.Module):
         if self.t_feat is not None:
             content_list.append(self.t_feat)
         if len(content_list) > 0:
-            # Assume features are aligned by item index (without user shift)
             self.content_feat = torch.cat(content_list, dim=1)
             content_dim = self.content_feat.size(1)
             # Generator: map content features into the same embedding space.
@@ -53,13 +55,15 @@ class GARRec(nn.Module):
             self.generator = None
 
         # Discriminator: an MLP to judge user-item pair quality.
-        # It takes concatenated user and item embeddings.
         self.discriminator = nn.Sequential(
             nn.Linear(dim_E * 2, 256),
             nn.LeakyReLU(0.2),
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
+        
+        # Initialize result tensor for TDRO (if used later)
+        self.result = torch.zeros((num_user + num_item, dim_E)).cuda()
 
     def feature_extractor(self):
         # If a generator is defined, use it to generate embeddings from content.
