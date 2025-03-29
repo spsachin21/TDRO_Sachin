@@ -7,7 +7,7 @@ import random
 from Dataset import data_load, DRO_Dataset
 from model_GARRec import GARRec
 from torch.utils.data import DataLoader
-from Train import train_TDRO
+from Train_GAR import train_TDRO
 from Full_rank import full_ranking
 from Metric import print_results
 
