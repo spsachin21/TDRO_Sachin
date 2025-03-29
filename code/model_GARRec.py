@@ -79,52 +79,55 @@ class GARRec(nn.Module):
         return scores
 
     def loss(self, user_tensor, item_tensor):
-        """
-        Returns a tuple (loss, reg_loss) similar to CLCRec.
-        For adversarial loss, we use the discriminator to differentiate between
-        real item embeddings (from id_embedding) and generated ones (from content features).
-        
-        Here, we assume that item_tensor's first column is the positive item.
-        """
-        # Get embeddings for users and the positive items.
-        user_emb = self.id_embedding[user_tensor]  # Might be shape [B, 1, dim_E] or [B, dim_E]
-        if user_emb.dim() == 3:
-            user_emb = user_emb.squeeze(1)  # Now shape [B, dim_E]
-        
-        pos_item_tensor = item_tensor[:, 0]  # Extract positive items, shape [B]
-        pos_item_emb = self.id_embedding[pos_item_tensor]  # Shape [B, dim_E]
-        
-        # Generate "fake" item embeddings from content for cold items.
-        if self.generator is not None and self.content_feat is not None:
-            # Assume content features are ordered by the original item id.
-            # Since in id_embedding items are shifted by num_user, adjust indices accordingly.
-            gen_emb_all = self.feature_extractor()  # shape: (num_item, dim_E)
-            fake_item_emb = gen_emb_all[pos_item_tensor - self.num_user]
-        else:
-            fake_item_emb = pos_item_emb  # Fallback if no generator is provided.
-        
-        # Build pairs for the discriminator.
-        real_pair = torch.cat([user_emb, pos_item_emb], dim=1)  # [B, 2*dim_E]
-        fake_pair = torch.cat([user_emb, fake_item_emb], dim=1)   # [B, 2*dim_E]
-        
-        # Discriminator outputs.
-        d_real = self.discriminator(real_pair)
-        d_fake = self.discriminator(fake_pair)
-        
-        # Adversarial losses:
-        # For the discriminator: encourage d_real to be 1 and d_fake to be 0.
-        loss_d_real = F.binary_cross_entropy(d_real, torch.ones_like(d_real))
-        loss_d_fake = F.binary_cross_entropy(d_fake, torch.zeros_like(d_fake))
-        d_loss = loss_d_real + loss_d_fake
-        
-        # For the generator: encourage the discriminator to classify fake pairs as real.
-        g_loss = F.binary_cross_entropy(d_fake, torch.ones_like(d_fake))
-        
-        # Combine losses. You can adjust the weighting using self.contrastive.
-        combined_loss = self.contrastive * g_loss + (1 - self.contrastive) * d_loss
-        
-        # Regularization on embeddings (similar to CLCRec).
-        reg_loss = self.reg_weight * (torch.norm(user_emb, p=2) + torch.norm(pos_item_emb, p=2)) / 2
-        
-        return combined_loss, reg_loss
+    """
+    Returns a tuple (loss, reg_loss) similar to CLCRec.
+    For adversarial loss, we use the discriminator to differentiate between
+    real item embeddings (from id_embedding) and generated ones (from content features).
+    
+    Here, we assume that item_tensor's first column is the positive item.
+    """
+    # Get embeddings for users.
+    user_emb = self.id_embedding[user_tensor]  # might be [B, 1, dim_E] or [B, dim_E]
+    user_emb = user_emb.view(user_emb.size(0), -1)  # force shape [B, dim_E]
+    
+    # Extract positive item IDs and get their embeddings.
+    pos_item_tensor = item_tensor[:, 0]  # shape: [B]
+    pos_item_emb = self.id_embedding[pos_item_tensor]  # shape: [B, dim_E]
+    pos_item_emb = pos_item_emb.view(pos_item_emb.size(0), -1)  # ensure [B, dim_E]
+    
+    # Generate "fake" item embeddings from content for cold items.
+    if self.generator is not None and self.content_feat is not None:
+        # Assume content features are ordered by the original item id.
+        # Since in id_embedding items are shifted by num_user, adjust indices accordingly.
+        gen_emb_all = self.feature_extractor()  # shape: (num_item, dim_E)
+        fake_item_emb = gen_emb_all[pos_item_tensor - self.num_user]
+        fake_item_emb = fake_item_emb.view(fake_item_emb.size(0), -1)
+    else:
+        fake_item_emb = pos_item_emb  # fallback if no generator
+    
+    # Build pairs for the discriminator.
+    real_pair = torch.cat([user_emb, pos_item_emb], dim=1)  # shape: [B, 2*dim_E]
+    fake_pair = torch.cat([user_emb, fake_item_emb], dim=1)   # shape: [B, 2*dim_E]
+    
+    # Discriminator outputs.
+    d_real = self.discriminator(real_pair)
+    d_fake = self.discriminator(fake_pair)
+    
+    # Adversarial losses:
+    # For discriminator: encourage d_real to be 1 and d_fake to be 0.
+    loss_d_real = F.binary_cross_entropy(d_real, torch.ones_like(d_real))
+    loss_d_fake = F.binary_cross_entropy(d_fake, torch.zeros_like(d_fake))
+    d_loss = loss_d_real + loss_d_fake
+    
+    # For generator: encourage the discriminator to classify fake pairs as real.
+    g_loss = F.binary_cross_entropy(d_fake, torch.ones_like(d_fake))
+    
+    # Combine losses. Weight them using self.contrastive if desired.
+    combined_loss = self.contrastive * g_loss + (1 - self.contrastive) * d_loss
+    
+    # Regularization on embeddings (similar to CLCRec).
+    reg_loss = self.reg_weight * (torch.norm(user_emb, p=2) + torch.norm(pos_item_emb, p=2)) / 2
+    
+    return combined_loss, reg_loss
+
 
