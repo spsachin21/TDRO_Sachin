@@ -105,25 +105,29 @@ class GARRec(nn.Module):
         return sample_loss, reg_loss
 
     def select_negatives(self, user_tensor, adj_matrix):
-        """
-        Select negative items using the policy network.
-        
-        Args:
-            user_tensor: Tensor of user IDs [batch_size]
-            adj_matrix: Candidate items per user [batch_size, num_candidates]
-        
-        Returns:
-            neg_item_ids: Selected negative item IDs [batch_size]
-            log_prob: Log probabilities of selections [batch_size]
-        """
-        user_emb = self.id_embedding[user_tensor]          # [batch_size, dim_E]
-        policy_emb = self.policy_net(user_emb)             # [batch_size, dim_E]
-        candidates = adj_matrix                            # [batch_size, num_candidates]
-        candidate_embs = self.id_embedding[candidates]     # [batch_size, num_candidates, dim_E]
-        logits = torch.sum(policy_emb.unsqueeze(1) * candidate_embs, dim=2)  # [batch_size, num_candidates]
-        probs = F.softmax(logits, dim=1)                   # [batch_size, num_candidates]
-        dist = torch.distributions.Categorical(probs)
-        selected_idx = dist.sample()                       # [batch_size]
-        log_prob = dist.log_prob(selected_idx)             # [batch_size]
-        neg_item_ids = candidates[torch.arange(user_tensor.size(0)), selected_idx]  # [batch_size]
-        return neg_item_ids, log_prob
+    user_emb = self.id_embedding[user_tensor]  # [batch_size, dim_E]
+    policy_emb = self.policy_net(user_emb)     # [batch_size, dim_E]
+    batch_size = user_tensor.size(0)
+    num_candidates = adj_matrix.size(1)
+    chunk_size = 32
+    neg_item_ids = torch.zeros(batch_size, dtype=torch.long, device=user_tensor.device)
+    log_prob = torch.zeros(batch_size, device=user_tensor.device)
+    
+    for i in range(0, num_candidates, chunk_size):
+        end = min(i + chunk_size, num_candidates)
+        chunk_candidates = adj_matrix[:, i:end]
+        chunk_embs = self.id_embedding[chunk_candidates]
+        chunk_logits = torch.sum(policy_emb.unsqueeze(1) * chunk_embs, dim=2)
+        chunk_probs = F.softmax(chunk_logits, dim=1)
+        dist = torch.distributions.Categorical(chunk_probs)
+        chunk_idx = dist.sample()
+        if i == 0:
+            neg_item_ids = chunk_candidates[torch.arange(batch_size), chunk_idx]
+            log_prob = dist.log_prob(chunk_idx)
+        else:
+            chunk_log_prob = dist.log_prob(chunk_idx)
+            mask = chunk_log_prob > log_prob
+            neg_item_ids = torch.where(mask, chunk_candidates[torch.arange(batch_size), chunk_idx], neg_item_ids)
+            log_prob = torch.where(mask, chunk_log_prob, log_prob)
+    
+    return neg_item_ids, log_prob
