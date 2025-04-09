@@ -22,8 +22,7 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
                .unsqueeze(0).unsqueeze(-1).cuda())
 
     for user_tensor, item_tensor, group_tensor, period_tensor in dataloader:
-        # user_tensor: [batch_size, num_items] -> extract unique user IDs
-        user_ids = user_tensor[:, 0]  # Take first column as user IDs [batch_size]
+        user_ids = user_tensor[:, 0]  # [batch_size]
         batch_size = user_ids.size(0)
         candidates = adj_matrix[user_ids]  # [batch_size, num_candidates]
         neg_item_ids, log_prob = model.select_negatives(user_ids.cuda(), candidates.cuda())
@@ -32,7 +31,7 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
         
         loss_ge = torch.zeros((n_group, n_period)).cuda()
         grad_ge = torch.zeros((n_group, n_period, 
-                              model.id_embedding.num_embeddings * model.id_embedding.embedding_dim)).cuda()
+                              model.id_embedding.shape[0] * model.id_embedding.shape[1])).cuda()
         
         for g_idx in range(n_group):
             for e_idx in range(n_period):
