@@ -108,19 +108,19 @@ class GARRec(nn.Module):
         user_emb = self.id_embedding[user_tensor]  # [batch_size, dim_E]
         policy_emb = self.policy_net(user_emb)     # [batch_size, dim_E]
         batch_size = user_tensor.size(0)
-        num_candidates = adj_matrix.size(1)
+        num_candidates = adj_matrix.size(1)  # adj_matrix is candidates from train_TDRO
         chunk_size = 32
         neg_item_ids = torch.zeros(batch_size, dtype=torch.long, device=user_tensor.device)
         log_prob = torch.zeros(batch_size, device=user_tensor.device)
         
         for i in range(0, num_candidates, chunk_size):
             end = min(i + chunk_size, num_candidates)
-            chunk_candidates = adj_matrix[:, i:end]
-            chunk_embs = self.id_embedding[chunk_candidates]
-            chunk_logits = torch.sum(policy_emb.unsqueeze(1) * chunk_embs, dim=2)
-            chunk_probs = F.softmax(chunk_logits, dim=1)
+            chunk_candidates = adj_matrix[:, i:end]  # [batch_size, chunk_size]
+            chunk_embs = self.id_embedding[chunk_candidates]  # [batch_size, chunk_size, dim_E]
+            chunk_logits = torch.sum(policy_emb.unsqueeze(1) * chunk_embs, dim=2)  # [batch_size, chunk_size]
+            chunk_probs = F.softmax(chunk_logits, dim=1)  # [batch_size, chunk_size]
             dist = torch.distributions.Categorical(chunk_probs)
-            chunk_idx = dist.sample()
+            chunk_idx = dist.sample()  # [batch_size]
             if i == 0:
                 neg_item_ids = chunk_candidates[torch.arange(batch_size), chunk_idx]
                 log_prob = dist.log_prob(chunk_idx)
