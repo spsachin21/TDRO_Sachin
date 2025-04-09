@@ -61,7 +61,32 @@ def init():
     
     args = parser.parse_args()
     return args
-
+def build_adj_matrix(num_user, train_data, num_item, edge_threshold):
+    """
+    Build an adjacency matrix for negative sampling candidates.
+    
+    Args:
+        num_user: Number of users
+        train_data: Dict mapping users to their interacted items
+        num_item: Number of items
+        edge_threshold: Number of neighbors to sample
+    
+    Returns:
+        adj_matrix: Tensor [num_user, edge_threshold * 2] of candidate item IDs
+    """
+    adj_matrix = torch.zeros((num_user, edge_threshold * 2), dtype=torch.long)
+    for u in range(num_user):
+        if u in train_data:
+            neighbors = train_data[u]
+            if len(neighbors) >= edge_threshold:
+                sampled = random.sample(neighbors, edge_threshold)
+            else:
+                sampled = neighbors + random.sample(range(num_item), edge_threshold - len(neighbors))
+        else:
+            sampled = random.sample(range(num_item), edge_threshold)
+        random_items = random.sample(range(num_item), edge_threshold)
+        adj_matrix[u] = torch.tensor(sampled + random_items, dtype=torch.long)
+    return adj_matrix
 
 if __name__ == '__main__':
     args = init()
@@ -125,10 +150,17 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers)
     
     print('Data has been loaded.')
+    # Build adjacency matrix for negative sampling
+    edge_threshold = 64  # Adjust as needed
+    adj_matrix = build_adj_matrix(num_user, train_data, num_item, edge_threshold).cuda()
 
     ##########################################################################################################################################
     model = GARRec(warm_item, cold_item, num_user, num_item, reg_weight, dim_E, v_feat, a_feat, t_feat, temp_value, num_neg, contrastive, num_sample).cuda()
     ##########################################################################################################################################
+    # Define two optimizers
+    optimizer_d = torch.optim.Adam([model.id_embedding], lr=learning_rate)
+    optimizer_g = torch.optim.Adam(model.policy_net.parameters(), lr=learning_rate)
+    
     if args.inference:
         with torch.no_grad():
             model = torch.load('models/' + args.ckpt)
@@ -157,7 +189,8 @@ if __name__ == '__main__':
     for epoch in range(num_epoch):
         epoch_start_time = time.time()
 
-        loss = train_TDRO(train_dataloader, model, optimizer, num_group, num_period, loss_list, w_list, mu, eta, lam, p)
+        loss = train_TDRO(train_dataloader, model, optimizer_d, optimizer_g, adj_matrix, 
+                         num_group, num_period, loss_list, w_list, mu, eta, lam, p)
         
         elapsed_time = time.time() - epoch_start_time
         print("Train: The time elapse of epoch {:03d}".format(epoch) + " is: " + 
