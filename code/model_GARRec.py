@@ -110,6 +110,8 @@ class GARRec(nn.Module):
         batch_size = user_tensor.size(0)
         num_candidates = adj_matrix.size(1)  # adj_matrix is candidates from train_TDRO
         chunk_size = 32
+        print(f"select_negatives: user_tensor shape: {user_tensor.shape}, adj_matrix shape: {adj_matrix.shape}")
+        print(f"policy_emb shape: {policy_emb.shape}, policy_emb.unsqueeze(1) shape: {policy_emb.unsqueeze(1).shape}")
         neg_item_ids = torch.zeros(batch_size, dtype=torch.long, device=user_tensor.device)
         log_prob = torch.zeros(batch_size, device=user_tensor.device)
         
