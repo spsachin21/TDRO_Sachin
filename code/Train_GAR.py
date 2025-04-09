@@ -26,6 +26,7 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
     for user_tensor, item_tensor, group_tensor, period_tensor in dataloader:
         # Select negatives using policy network
         candidates = adj_matrix[user_tensor]  # [batch_size, num_candidates]
+        print(f"train_TDRO: user_tensor shape: {user_tensor.shape}, candidates shape: {candidates.shape}")
         neg_item_ids, log_prob = model.select_negatives(user_tensor.cuda(), candidates.cuda())
         
         # Extract positive item IDs (first column of item_tensor)
