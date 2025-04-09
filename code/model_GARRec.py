@@ -16,20 +16,16 @@ class GARRec(nn.Module):
         self.contrastive = contrastive
         self.num_sample = num_sample
 
-        # Save warm and cold item info
         self.warm_item = warm_item  
         self.cold_item = cold_item  
 
-        # Attributes for TDRO
         self.emb_id = list(range(num_user)) + list(warm_item)
         self.feat_id = torch.tensor([i - num_user for i in cold_item])
         
-        # Single learnable embedding table for users and items
         self.id_embedding = nn.Parameter(
             nn.init.xavier_normal_(torch.rand(num_user + num_item, dim_E))
         )
         
-        # Content feature extractor for items (kept for cold-start functionality)
         self.v_feat = F.normalize(v_feat, dim=1) if v_feat is not None else None
         self.a_feat = F.normalize(a_feat, dim=1) if a_feat is not None else None
         self.t_feat = F.normalize(t_feat, dim=1) if t_feat is not None else None
@@ -53,14 +49,12 @@ class GARRec(nn.Module):
             self.content_feat = None
             self.generator = None
 
-        # Policy network for negative sampling
         self.policy_net = nn.Sequential(
             nn.Linear(dim_E, 256),
             nn.ReLU(),
             nn.Linear(256, dim_E)
         )
         
-        # Result tensor for TDRO
         self.result = torch.zeros((num_user + num_item, dim_E)).cuda()
 
     def feature_extractor(self):
@@ -76,25 +70,13 @@ class GARRec(nn.Module):
         return scores
 
     def loss(self, user_tensor, pos_item_tensor, neg_item_tensor):
-        """
-        Compute BPR loss using user, positive item, and negative item embeddings.
+        user_emb = self.id_embedding[user_tensor]
+        pos_item_emb = self.id_embedding[pos_item_tensor]
+        neg_item_emb = self.id_embedding[neg_item_tensor]
         
-        Args:
-            user_tensor: Tensor of user IDs [batch_size]
-            pos_item_tensor: Tensor of positive item IDs [batch_size]
-            neg_item_tensor: Tensor of negative item IDs [batch_size]
-        
-        Returns:
-            sample_loss: Per-sample BPR loss [batch_size]
-            reg_loss: Regularization loss
-        """
-        user_emb = self.id_embedding[user_tensor]        # [batch_size, dim_E]
-        pos_item_emb = self.id_embedding[pos_item_tensor]  # [batch_size, dim_E]
-        neg_item_emb = self.id_embedding[neg_item_tensor]  # [batch_size, dim_E]
-        
-        pos_scores = torch.sum(user_emb * pos_item_emb, dim=1)  # [batch_size]
-        neg_scores = torch.sum(user_emb * neg_item_emb, dim=1)  # [batch_size]
-        sample_loss = -F.logsigmoid(pos_scores - neg_scores)    # [batch_size]
+        pos_scores = torch.sum(user_emb * pos_item_emb, dim=1)
+        neg_scores = torch.sum(user_emb * neg_item_emb, dim=1)
+        sample_loss = -F.logsigmoid(pos_scores - neg_scores)
         
         reg_loss = self.reg_weight * (
             torch.norm(user_emb, p=2) + 
@@ -108,10 +90,8 @@ class GARRec(nn.Module):
         user_emb = self.id_embedding[user_tensor]  # [batch_size, dim_E]
         policy_emb = self.policy_net(user_emb)     # [batch_size, dim_E]
         batch_size = user_tensor.size(0)
-        num_candidates = adj_matrix.size(1)  # adj_matrix is candidates from train_TDRO
+        num_candidates = adj_matrix.size(1)
         chunk_size = 32
-        print(f"select_negatives: user_tensor shape: {user_tensor.shape}, adj_matrix shape: {adj_matrix.shape}")
-        print(f"policy_emb shape: {policy_emb.shape}, policy_emb.unsqueeze(1) shape: {policy_emb.unsqueeze(1).shape}")
         neg_item_ids = torch.zeros(batch_size, dtype=torch.long, device=user_tensor.device)
         log_prob = torch.zeros(batch_size, device=user_tensor.device)
         
@@ -120,9 +100,9 @@ class GARRec(nn.Module):
             chunk_candidates = adj_matrix[:, i:end]  # [batch_size, chunk_size]
             chunk_embs = self.id_embedding[chunk_candidates]  # [batch_size, chunk_size, dim_E]
             chunk_logits = torch.sum(policy_emb.unsqueeze(1) * chunk_embs, dim=2)  # [batch_size, chunk_size]
-            chunk_probs = F.softmax(chunk_logits, dim=1)  # [batch_size, chunk_size]
+            chunk_probs = F.softmax(chunk_logits, dim=1)
             dist = torch.distributions.Categorical(chunk_probs)
-            chunk_idx = dist.sample()  # [batch_size]
+            chunk_idx = dist.sample()
             if i == 0:
                 neg_item_ids = chunk_candidates[torch.arange(batch_size), chunk_idx]
                 log_prob = dist.log_prob(chunk_idx)
