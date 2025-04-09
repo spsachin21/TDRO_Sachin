@@ -147,7 +147,7 @@ if __name__ == '__main__':
     pretrained_emb = torch.FloatTensor(pretrained_emb).cuda()
 
     train_dataset = DRO_Dataset(num_user, num_item, user_item_all_dict, cold_item, train_data, num_neg, num_group, num_period, split_mode, pretrained_emb)
-    train_dataloader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers)
+    train_dataloader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers,drop_last=True)
     
     print('Data has been loaded.')
     # Build adjacency matrix for negative sampling
