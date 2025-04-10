@@ -189,8 +189,10 @@ if __name__ == '__main__':
     for epoch in range(num_epoch):
         epoch_start_time = time.time()
 
+        print(f"GPU memory allocated before training: {torch.cuda.memory_allocated()/1024**3:.2f} GiB")
         loss = train_TDRO(train_dataloader, model, optimizer_d, optimizer_g, adj_matrix, 
-                         num_group, num_period, loss_list, w_list, mu, eta, lam, p)
+                          num_group, num_period, loss_list, w_list, mu, eta, lam, p)
+        print(f"GPU memory allocated after training: {torch.cuda.memory_allocated()/1024**3:.2f} GiB")
         
         elapsed_time = time.time() - epoch_start_time
         print("Train: The time elapse of epoch {:03d}".format(epoch) + " is: " + 
