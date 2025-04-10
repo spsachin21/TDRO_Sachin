@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import time
@@ -151,7 +152,7 @@ if __name__ == '__main__':
     
     print('Data has been loaded.')
     # Build adjacency matrix for negative sampling
-    edge_threshold = 32  # Adjust as needed
+    edge_threshold = 64  # Adjust as needed
     adj_matrix = build_adj_matrix(num_user, train_data, num_item, edge_threshold).cuda()
 
     ##########################################################################################################################################
