@@ -24,7 +24,7 @@ def init():
     parser.add_argument('--batch_size', type=int, default=256, help='Batch size.')
     parser.add_argument('--num_epoch', type=int, default=200, help='Epoch number.')
     parser.add_argument('--num_workers', type=int, default=1, help='Workers number.')
-    parser.add_argument("--topK", default='[10, 20, 50, 100]', help="the recommended item num")
+    parser.add_argument("--topK", default='[3,10, 20, 50]', help="the recommended item num")
     parser.add_argument('--step', type=int, default=2000, help='Workers number.')
 
     parser.add_argument('--l_r', type=float, default=1e-3, help='Learning rate.')
