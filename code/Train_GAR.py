@@ -17,16 +17,16 @@ def train_ERM(dataloader, model, optimizer):
 def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix, 
                n_group, n_period, loss_list, w_list, mu, eta, lamda, beta_p):
     model.train()
-    m = nn.Softmax(dim=1) 
+    m = nn.Softmax(dim=1)
     beta_e = m(torch.tensor([math.exp(beta_p * e) for e in range(n_period)])
                .unsqueeze(0).unsqueeze(-1).cuda())
-
+    
     for user_tensor, item_tensor, group_tensor, period_tensor in dataloader:
         user_ids = user_tensor[:, 0]  # [batch_size]
         batch_size = user_ids.size(0)
-        candidates = adj_matrix[user_ids]  # [batch_size, num_candidates]
-        neg_item_ids, log_prob = model.select_negatives(user_ids.cuda(), candidates.cuda())
-        pos_item_ids = item_tensor[:, 0]  # [batch_size]
+        candidates = adj_matrix[user_ids].cuda()  # Fetch to GPU: [batch_size, num_candidates]
+        neg_item_ids, log_prob = model.select_negatives(user_ids.cuda(), candidates)
+        pos_item_ids = item_tensor[:, 0]
         sample_loss, reg_loss = model.loss(user_ids.cuda(), pos_item_ids.cuda(), neg_item_ids.cuda())
         
         loss_ge = torch.zeros((n_group, n_period)).cuda()
