@@ -21,13 +21,25 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
     beta_e = m(torch.tensor([math.exp(beta_p * e) for e in range(n_period)])
                .unsqueeze(0).unsqueeze(-1).cuda())
     
+    adv_coef = 0.5  # From previous input, Amazon
+    int_coef = 0.6  # From previous input, Amazon
+    
     for user_tensor, item_tensor, group_tensor, period_tensor in dataloader:
-        user_ids = user_tensor[:, 0]  # [batch_size]
+        user_ids = user_tensor[:, 0]
         batch_size = user_ids.size(0)
-        candidates = adj_matrix[user_ids].cuda()  # Fetch to GPU: [batch_size, num_candidates]
-        neg_item_ids, log_prob = model.select_negatives(user_ids.cuda(), candidates)
+        candidates = adj_matrix[user_ids].cuda()
+        
+        neg_item_ids_list = []
+        log_prob_sum = 0
+        num_negatives = 5
+        for _ in range(num_negatives):
+            neg_ids, log_prob = model.select_negatives(user_ids.cuda(), candidates)
+            neg_item_ids_list.append(neg_ids)
+            log_prob_sum += log_prob
+        neg_item_ids = torch.stack(neg_item_ids_list, dim=1)  # [batch_size, num_negatives]
+        
         pos_item_ids = item_tensor[:, 0]
-        sample_loss, reg_loss = model.loss(user_ids.cuda(), pos_item_ids.cuda(), neg_item_ids.cuda())
+        sample_loss, reg_loss = model.loss(user_ids.cuda(), pos_item_ids.cuda(), neg_item_ids[:, 0].cuda())
         
         loss_ge = torch.zeros((n_group, n_period)).cuda()
         grad_ge = torch.zeros((n_group, n_period, 
@@ -53,15 +65,15 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
             sum_gie = torch.mean(grad_ge * beta_e, dim=[0, 1])
             trend_[g_idx] = g_j @ sum_gie
         
-        loss_ = loss_ * (1 - lamda) + trend_ * lamda
+        loss_ = loss_ * (1 - lamda) + trend_ * lamda  # lamda=0.9
         
         loss_[loss_ == 0] = loss_list[loss_ == 0]
         loss_list = (1 - mu) * loss_list + mu * loss_
         
-        update_factor = eta * loss_list
+        update_factor = eta * loss_list * 2
         w_list = w_list * torch.exp(update_factor)
         w_list = w_list / torch.sum(w_list)
-        loss_weightsum = torch.sum(w_list * loss_list) + reg_loss
+        loss_weightsum = int_coef * (torch.sum(w_list * loss_list) / batch_size) + reg_loss / batch_size
         
         optimizer_d.zero_grad()
         loss_weightsum.backward()
@@ -69,9 +81,9 @@ def train_TDRO(dataloader, model, optimizer_d, optimizer_g, adj_matrix,
         
         optimizer_g.zero_grad()
         user_emb = model.id_embedding[user_ids.cuda()]
-        neg_item_emb = model.id_embedding[neg_item_ids.cuda()]
-        reward = torch.sum(user_emb * neg_item_emb, dim=1)
-        reinforce_loss = -torch.mean(reward * log_prob)
+        neg_emb_mean = torch.mean(model.id_embedding[neg_item_ids.cuda()], dim=1)
+        reward = torch.sum(user_emb * neg_emb_mean, dim=1)
+        reinforce_loss = adv_coef * (-torch.mean(reward * log_prob_sum) / num_negatives)
         reinforce_loss.backward()
         optimizer_g.step()
         
