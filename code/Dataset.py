@@ -379,7 +379,9 @@ class DRO_Dataset(Dataset):
 
     def __getitem__(self, index):
         user, pos_item, e_pos, g_pos = self.train_data[index]
-        neg_item = random.sample(self.all_set-set(self.user_item_dict[user]), self.num_neg)
+        neg_item = random.sample(list(self.all_set - set(self.user_item_dict[user])), self.num_neg)
+
+        # neg_item = random.sample(self.all_set-set(self.user_item_dict[user]), self.num_neg)
 
         user_tensor = torch.LongTensor([user]*(self.num_neg+1))
         item_tensor = torch.LongTensor([pos_item] + neg_item)
