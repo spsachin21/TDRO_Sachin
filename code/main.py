@@ -14,7 +14,7 @@ from Metric import print_results
 ###############################248###########################################
 
 def init():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser() # ArgumentParser object, argparse is a module; handle command-line arguments.- argparse.ArgumentParser() creates an instance of the ArgumentParser class.
     parser.add_argument('--seed', type=int, default=1, help='Seed init.')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
     parser.add_argument('--data_path', default='kwai_small', help='Dataset path')
@@ -47,12 +47,12 @@ def init():
     # TDRO
     parser.add_argument('--num_period', type=int, default=1, help='time period number for TDRO')
     parser.add_argument('--split_mode', type=str, default='global', help='split the group by global time or relative interactions per user', choices=['relative','global'])
-    parser.add_argument('--lam', type=float, default=0.5, help='coefficient for time-aware shifting trend')
-    parser.add_argument('--p', type=float, default=0.2, help='strength of gradient (see more in common good)')
+    parser.add_argument('--lam', type=float, default=0.5, help='coefficient for time-aware shifting trend')  # lambda balances off shiting and worst case for group selection
+    parser.add_argument('--p', type=float, default=0.2, help='strength of gradient (see more in common good)')  # steepness (p) value for period importance
 
     # group evaluation
-    parser.add_argument('--group_test', action='store_true', help='whether or not do evaluation of user/item groups')
-    parser.add_argument('--portion_list', type=str, help='portion list of different groups')
+    parser.add_argument('--group_test', action='store_true', help='whether or not do evaluation of user/item groups')  # This is a flag (a yes/no switch). You don’t need to pass a value.
+    parser.add_argument('--portion_list', type=str, help='portion list of different groups')  #accepts a string that likely represents a list of percentages or ratios to divide users/items into different groups.
 
     parser.add_argument('--gpu', default='0', help='gpu id')
     parser.add_argument('--save_path', default='./models/', help='model save path')
