@@ -46,13 +46,13 @@ def train_TDRO(dataloader, model, optimizer, n_group, n_period, loss_list, w_lis
                         
         # worst-case factor
         de = torch.tensor([torch.sum(group_tensor==g_idx) for g_idx in range(n_group)]).cuda()  # no. of datapoints across groups
-        loss_ = torch.sum(loss_ge,dim=1) # loss of a group across all periods dim=1 being const.< ==
+        loss_ = torch.sum(loss_ge,dim=1) # loss of a group across all periods dim=1 being used.< ==
         loss_ = loss_/(de+1e-16)
         
         # shifting factor
         trend_ = torch.zeros(n_group).cuda()
         for g_idx in range(n_group):
-            g_j = torch.mean(grad_ge[g_idx],dim=0)  # sum up the period gradient for group ==> dim 0 const
+            g_j = torch.mean(grad_ge[g_idx],dim=0)  # sum up the period gradient for group- dim 0 ==> dim 0 const
             sum_gie = torch.mean(grad_ge * beta_e, dim=[0,1]) 
             trend_[g_idx] = g_j@sum_gie  
 
