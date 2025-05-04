@@ -6,7 +6,7 @@ import torch
 import random
 from Dataset import data_load, DRO_Dataset
 from model_CLCRec import CLCRec
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader    #Imports the DataLoader class from PyTorch, used for efficient data loading during training.
 from Train import train_TDRO
 from Full_rank import full_ranking
 from Metric import print_results
@@ -63,19 +63,19 @@ def init():
     return args
 
 
-if __name__ == '__main__':
-    args = init()
-    print(args)
-    seed = args.seed
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    device = torch.device("cuda:0" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+if __name__ == '__main__':      
+    args = init() 
+    print(args) 
+    seed = args.seed               #Set Random Seeds (Reproducibility)
+    random.seed(seed)                # for Python’s built-in random.
+    np.random.seed(seed)            #for NumPy operations
+    torch.manual_seed(seed)            # for CPU torch ops.
+    torch.cuda.manual_seed_all(seed)    #for GPU torch ops.
+    torch.backends.cudnn.deterministic = True      #Makes CUDA deterministic (reproducible GPU results).
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu    # GPU Setup
+    device = torch.device("cuda:0" if torch.cuda.is_available() and not args.no_cuda else "cpu")  # checks if gpu '0' ( default in gpu ) is avl or not 
     ##########################################################################################################################################
-    data_path = args.data_path
+    data_path = args.data_path       #for loading and structuring the data- data_load() ; DRO_Dataset – a PyTorch Dataset class for feeding data into the model
     learning_rate = args.l_r
     contrastive = args.contrastive
     reg_weight = args.reg_weight
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     print('Data loading ...')
 
     num_user, num_item, num_warm_item, train_data, val_data, val_warm_data, val_cold_data, test_data, test_warm_data, test_cold_data, v_feat, a_feat, t_feat = data_load(data_path)
-    dir_str = f'../data/{args.data_path}'
+    dir_str = f'../data/{args.data_path}'   #This line constructs the path to the directory containing the data file.
 
     user_item_all_dict = {}
     train_dict = {}
@@ -111,12 +111,11 @@ if __name__ == '__main__':
     for u_id in train_data:
         user_item_all_dict[u_id] = train_data[u_id] + val_data[u_id] + test_data[u_id]
         train_dict[u_id] = train_data[u_id]
-        tv_dict[u_id] = train_data[u_id] + val_data[u_id]
-    warm_item = torch.tensor(list(np.load(dir_str + '/warm_item.npy',allow_pickle=True).item()))
-    cold_item = torch.tensor(list(np.load(dir_str + '/cold_item.npy',allow_pickle=True).item()))
+        tv_dict[u_id] = train_data[u_id] + val_data[u_id]   # warm_item is a set of warm item ids
+    warm_item = torch.tensor(list(np.load(dir_str + '/warm_item.npy',allow_pickle=True).item()))     #This part uses NumPy (np) to load data from a file named 'warm_item.npy' located in the dir_str directory. allow_pickle=True allows loading data that was saved using Python's pickle serialization.
+    cold_item = torch.tensor(list(np.load(dir_str + '/cold_item.npy',allow_pickle=True).item()))     # loads data cold item using numpy and path directory , fetches items and converts it to tensor
     warm_item = set([i_id.item() + num_user for i_id in warm_item])    # item id = item_id_org + user num
-    cold_item = set([i_id.item() + num_user for i_id in cold_item])
-
+    cold_item = set([i_id.item() + num_user for i_id in cold_item])     
     # pretrained item embedding
     pretrained_emb = np.load(args.pretrained_emb+data_path+'/all_item_feature.npy',allow_pickle=True)
     pretrained_emb = torch.FloatTensor(pretrained_emb).cuda()
@@ -125,14 +124,14 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers)
     
     print('Data has been loaded.')
-
+       # warm + and cold _ve                                #creates an instance of your custom recommendation model called CLCRec (Contrastive Learning for Cold-start Recommendation), and pushes it to the GPU using .cuda().                                                                     
     ##########################################################################################################################################
     model = CLCRec(warm_item, cold_item, num_user, num_item, reg_weight, dim_E, v_feat, a_feat, t_feat, temp_value, num_neg, contrastive, num_sample).cuda()
     ##########################################################################################################################################
-    if args.inference:
-        with torch.no_grad():
-            model = torch.load('models/' + args.ckpt)
-            test_result = full_ranking(0, model, test_data, tv_dict, None, False, step, topK)
+    if args.inference:                 # If you’ve passed --inference when running the script, this block runs instead of training.This means you're not training a new model, you're loading an existing trained model and evaluating it
+        with torch.no_grad():          #don’t compute gradients (saves memory + time).
+            model = torch.load('models/' + args.ckpt)   #Loads the pretrained model from disk. args.ckpt is a filename like:
+            test_result = full_ranking(0, model, test_data, tv_dict, None, False, step, topK)     
             test_result_warm = full_ranking(0, model, test_warm_data, tv_dict, cold_item, False, step, topK)
             test_result_cold = full_ranking(0, model, test_cold_data, tv_dict, warm_item, False, step, topK)
             print('---'*18)
@@ -142,7 +141,7 @@ if __name__ == '__main__':
             print_results(None,None,test_result_warm)
             print('Cold')
             print_results(None,None,test_result_cold)
-        os._exist(1)
+        os._exist(1)   #This is a hard exit — ends the program immediately after inference. typo it should be exit
     ##########################################################################################################################################
     optimizer = torch.optim.Adam([{'params': model.parameters(), 'lr': learning_rate}])#, 'weight_decay': reg_weight}])
     ##########################################################################################################################################
